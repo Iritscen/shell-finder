@@ -15,7 +15,7 @@ IFS="
 
 ## GLOBALS ##
 SEARCH_DIR=
-SEARCH_FILES=
+SEARCH_FILES="^.*$"
 declare -a SEARCH_TERMS_PLUS=()
 declare -a SEARCH_TERMS_MINUS=()
 WITHIN=0
@@ -38,6 +38,9 @@ declare -a MINUS_ARGS=()
 NUM_ARGS=0
 STR_FILES="files"
 STR_TERMS="terms"
+cols=$(tput cols)
+bold=$(tput bold)
+normal=$(tput sgr0)
 
 
 ## UTILITY FUNCTIONS ##
@@ -73,37 +76,40 @@ function niceExit()
 
 trap niceExit INT
 
-# Print usage of program
+# Print usage of program; use this margin for help text:
+# |----------------------------------------------------------------------------|
 function printHelp()
 {
+   echo -n ${bold}
+   echo "--Find By Content--" | fmt -w $cols -c
+   echo -n ${normal}
    cat << EOF
 You can supply the following parameters, in any order:
+${bold}Required:${normal}
   --dir [dir]: The directory which should be recursively searched.
-  --name [name]: The names of the files to be searched, as a regex pattern. For
-    example, \"\.[ch]$\" would search all files ending in \".c\" or \".h\".
-    \"\.[c]+$\" would find all .c and .cc files.
   --find [term]: A search term (regex pattern) to look for in these files. You
     can use --find as many times as you want to add search terms, and any file
     that matches one or more of the terms will be returned.
-  --omit [term] (optional): A search term (regex pattern) to cut out of the
-    results obtained by searching for the --find term(s). You can use --omit as
-    many times as you want to create multiple cut-outs from the combined search
-    results of all the --find operations.
-  --within [num] (optional): Any two hits must be within this many lines.
-  --insens (optional): Perform content searches with case-insensitivity.
-One of the next three options must be used to tell the script which mode to
-operate in:
+  ${bold}(pick one:)${normal}
   --print: Print the matches within each file to screen.
   --copy-to [dir]: The directory into which to copy matching files.
   --delete: Delete the matching files (sends files to Trash).
-These options can be used with 'print' mode:
-  --above [num] (optional): The amount of lines before the matching content
-    that should be shown (zero by default).
-  --below [num] (optional): The amount of lines after the matching content that
-    should be shown (zero by default).
-  --line-num (optional): Print the line number before each line's content.
-  --quiet (optional): Minimal output; no header line with the name and number of
-    matches in each file. Instead all content matches are printed back to back.
+${bold}Optional:${normal}
+  --in-files [name]: The names of the files to be searched, as a regex pattern.
+    For example, "\.[ch]$" would search files ending in ".c" or ".h"; "\.[c]+$"
+    would search ".c" and ".cc" files. Otherwise all files are searched.
+  --omit [term]: A search term (regex pattern) to cut out of the results
+    obtained by searching for the --find term(s). You can use --omit as many
+    times as you want to create multiple cut-outs from the combined search
+    results of all the --find operations.
+  --within [num]: Any two hits must be within this many lines.
+  --insens: Perform content searches with case-insensitivity.
+  ${bold}('print' mode only:)${normal}
+  --above [num]: Show this many lines before the matching content.
+  --below [num]: Show this many lines after the matching content.
+  --line-num: Print the line number before each line's content.
+  --quiet: Minimal output; no header line with the name and number of matches
+    in each file. Instead all content matches are printed back to back.
 EOF
 }
 
@@ -156,7 +162,7 @@ function correctForPathConflict()
 
 ## ARGUMENT PROCESSING ##
 # Show help if called without enough args
-if [ "$#" -lt 7 ]; then
+if [ "$#" -lt 5 ]; then
    printHelp
    exit
 fi
@@ -165,7 +171,7 @@ fi
 while (( "$#" )); do
    case "$1" in
       --dir )      SEARCH_DIR="$2"; shift 2;;
-      --name )     SEARCH_FILES="$2"; shift 2;;
+      --in-files ) SEARCH_FILES="$2"; shift 2;;
       --find )     SEARCH_TERMS_PLUS+=("$2"); let NUM_ARGS+=1; shift 2;;
       --omit )     SEARCH_TERMS_MINUS+=("$2"); let NUM_ARGS+=1; shift 2;;
       --within )   WITHIN="$2"; shift 2;;
@@ -189,11 +195,6 @@ fi
 
 if [ ! -d "$SEARCH_DIR" ]; then
    echo "Directory $SEARCH_DIR does not exist! Aborting."
-   exit
-fi
-
-if [ -z "$SEARCH_FILES" ]; then
-   echo "You didn't specify a pattern of file name to search in using --name! Aborting."
    exit
 fi
 
@@ -233,7 +234,7 @@ done
 
 
 ## MAIN PROGRAM ##
-for FN in `find "$SEARCH_DIR" | egrep $SEARCH_FILES`; do
+for FN in `find "$SEARCH_DIR" -type f | egrep $SEARCH_FILES`; do
    let CHECKED+=1
 
    # Get result of all plus terms, with accompanying line numbers
