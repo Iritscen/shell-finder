@@ -17,6 +17,7 @@ IFS="
 MATCH_BODY=1
 MATCH_SUFF=2
 MATCH_TYPE=3
+MATCH_DOT=4
 PRINT=1
 COPY_MIRR=2
 COPY_FLAT=3
@@ -25,6 +26,7 @@ MOVE_FLAT=5
 DELETE=6
 declare -a SUFFIX_SETS=(-archive 7z rar zip -code c cc cp cpp cs h hpp js m mm pas php py s sh -image gif jpeg jpg png tiff -text doc docx htm html pdf rtf txt xls xlsx -video 3gp avi flv m4v mkv mov mp4 mpeg mpg webm wmv)
 STR_FILES="files"
+cols=$(tput cols)
 bold=$(tput bold)
 normal=$(tput sgr0)
 THE_TIME=$(date "+%Y-%m-%d--%H-%M-%S")
@@ -33,6 +35,7 @@ TRASH_FOLDER="$HOME/.Trash/Deleted files ($THE_TIME)"
 
 ## VARIABLES ##
 MATCH_MODE=0
+NO_DSS=0
 OPER_MODE=0
 REVERSE_MODE=0 # 0 = operate on positive matches, 1 = use the negative matches
 SEARCH_PATH=""
@@ -79,6 +82,9 @@ function mypr()
 # Help user if they are lost
 function printHelp()
 {
+   echo -n ${bold}
+   echo "--Find By Name--" | fmt -w $cols -c
+   echo -n ${normal}
    mypr "You need to supply the following settings in any order:"
    echo "${bold}Operation mode:${normal}"
    mypr "   '--print': Print matching files to screen and take no other action."
@@ -95,9 +101,12 @@ function printHelp()
    mypr "   '--type:set1,set2': Find all files with these sets of suffixes. The available sets are:"
    printSetList
    mypr "   '--not-type:set1,set2': Find all files that aren't in these sets of suffixes."
+   mypr "   '--dotfile': Find all files beginning with a period."
    echo "${bold}Directories:${normal}"
    mypr "   '--from path': (Note the lack of a colon after 'from'.) The directory to search recursively."
    mypr "   '--dest path': (Not needed with '--delete' or '--print' option.) The folder to which the selected files should be copied or moved."
+   echo "${bold}Optional:${normal}"
+   mypr "   '--no-ds': When using the '--dotfile' option, don't show .DS_Store files."
 }
 
 # Checks to see if file name passed in is taken; if so, it attempts to add a number to
@@ -163,6 +172,8 @@ while (( "$#" )); do
       --not-suff:* ) MATCH_ARGS="$1"; MATCH_MODE=$MATCH_SUFF; REVERSE_MODE=1; shift;;
       --type:* )     MATCH_ARGS="$1"; MATCH_MODE=$MATCH_TYPE; REVERSE_MODE=0; shift;;
       --not-type:* ) MATCH_ARGS="$1"; MATCH_MODE=$MATCH_TYPE; REVERSE_MODE=1; shift;;
+      --dotfile )    MATCH_MODE=$MATCH_DOT; REVERSE_MODE=0; shift;;
+      --no-ds )      NO_DSS=1; shift;;
       --from )       SEARCH_PATH="$2"; shift 2;;
       --dest )       DEST_FOLDER="$2"; shift 2;;
       --print )      OPER_MODE=$PRINT; shift;;
@@ -289,7 +300,13 @@ else
    echo -n "in $SEARCH_PATH "
 fi
 
-if [ $REVERSE_MODE -eq 0 ]; then
+if [ $MATCH_MODE == $MATCH_DOT ]; then
+   if [ $NO_DSS -eq 0 ]; then
+      echo "if they are dot-files..."
+   else
+      echo "if they are dot-files (besides .DS_Store files)..."
+   fi
+elif [ $REVERSE_MODE -eq 0 ]; then
    echo -n "if they match the "
 else
    echo -n "if they don't match the "
@@ -297,7 +314,7 @@ fi
 
 if [ $MATCH_MODE -eq $MATCH_BODY ]; then
    echo "name pattern '$MATCH_NAME'..."
-else
+elif [ $MATCH_MODE -eq $MATCH_SUFF ] || [ $MATCH_MODE -eq $MATCH_TYPE ]; then
    echo "suffix list {${TARGET_SUFFIXES[@]}}..."
 fi
 
@@ -307,7 +324,16 @@ for FILE in `find "$SEARCH_PATH" -type f`; do
    FILE_NAME=$(echo "$FILE" | sed 's/.*\///') # clip file name from whole path
    MATCHED=0
 
-   if [ $MATCH_MODE -eq $MATCH_BODY ]; then
+   if [ $MATCH_MODE -eq $MATCH_DOT ]; then
+      # If name begins with a period...
+      if [[ "$FILE_NAME" =~ ^\. ]]; then
+         if [ $NO_DSS -eq 0 ]; then
+            MATCHED=1
+         elif [[ "$FILE_NAME" != ".DS_Store" ]]; then
+            MATCHED=1
+         fi
+      fi
+   elif [ $MATCH_MODE -eq $MATCH_BODY ]; then
       # If this is not a file with a name body (anything before the period), skip it
       if [[ "$FILE_NAME" =~ ^\. ]]; then
          continue
