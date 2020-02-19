@@ -234,7 +234,11 @@ done
 
 
 ## MAIN PROGRAM ##
-for FN in `find "$SEARCH_DIR" -type f | egrep $SEARCH_FILES`; do
+for FN in `find "$SEARCH_DIR" | egrep $SEARCH_FILES`; do
+   if [ -d "$FN" ]; then
+      continue
+   fi
+
    let CHECKED+=1
 
    # Get result of all plus terms, with accompanying line numbers
